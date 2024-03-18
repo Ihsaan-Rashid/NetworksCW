@@ -22,20 +22,61 @@ interface TemporaryNodeInterface {
 
 public class TemporaryNode implements TemporaryNodeInterface {
 
+    private String ipAddress;
+    private int port;
+    private String hashID; // Added hashID as a class member
+
     public boolean start(String startingNodeName, String startingNodeAddress) {
         try {
-            // Split the starting node address into IP address and port
-            String[] parts = startingNodeAddress.split(":");
-            String ipAddress = parts[0];
-            int port = Integer.parseInt(parts[1]);
+            // Find the closest full node
+            String closestNodeAddress = findClosestFullNode(hashID);
 
-            // Connect to the starting node
+            if (closestNodeAddress != null) {
+                // Split the closest node address into IP address and port
+                String[] parts = closestNodeAddress.split(":");
+                ipAddress = parts[0];
+                port = Integer.parseInt(parts[1]);
+
+                // Connect to the closest full node
+                Socket socket = new Socket(ipAddress, port);
+                PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+                BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+
+                // Send START message
+                out.println("START 1 " + startingNodeName);
+
+                // Receive response
+                String response = in.readLine();
+
+                // Close connection
+                socket.close();
+
+                // Check if connection was successful
+                return response != null && response.equals("START 1");
+            } else {
+                // Closest full node not found
+                System.err.println("Error: Closest full node not found");
+                return false;
+            }
+        } catch (Exception e) {
+            // Handle connection error
+            System.err.println("Error connecting to the closest full node: " + e.getMessage());
+            return false;
+        }
+    }
+
+
+    public boolean store(String key, String value) {
+        try {
+            // Connect to the 2D#4 network
             Socket socket = new Socket(ipAddress, port);
             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
             BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
-            // Send START message
-            out.println("START 1 " + startingNodeName);
+            // Send PUT? request
+            out.println("PUT? 1 1"); // Assuming key and value each occupy one line
+            out.println(key);
+            out.println(value);
 
             // Receive response
             String response = in.readLine();
@@ -43,27 +84,81 @@ public class TemporaryNode implements TemporaryNodeInterface {
             // Close connection
             socket.close();
 
-            // Check if connection was successful
-            return response != null && response.equals("START 1");
+            // Check if store was successful
+            return response != null && response.equals("SUCCESS");
 
         } catch (Exception e) {
-            // Handle connection error
-            System.err.println("Error connecting to the 2D#4 network: " + e.getMessage());
+            // Handle store error
+            System.err.println("Error storing (key, value) pair: " + e.getMessage());
             return false;
         }
     }
 
-    public boolean store(String key, String value) {
-	// Implement this!
-	// Return true if the store worked
-	// Return false if the store failed
-	return true;
-    }
 
     public String get(String key) {
-	// Implement this!
-	// Return the string if the get worked
-	// Return null if it didn't
-	return "Not implemented";
+        try {
+            // Connect to the 2D#4 network
+            Socket socket = new Socket(ipAddress, port);
+            PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+            BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+
+            // Send GET? request
+            out.println("GET? " + key); // Assuming key is sent as part of the GET? request
+
+            // Receive response
+            String response = in.readLine();
+
+            // Close connection
+            socket.close();
+
+            // Check if response contains the value
+            if (response != null && response.startsWith("VALUE ")) {
+                // Extract the value from the response
+                String value = response.substring(6); // Assuming "VALUE " prefix is removed
+                return value;
+            } else {
+                // Value not found or error response
+                return null;
+            }
+
+        } catch (Exception e) {
+            // Handle error
+            System.err.println("Error retrieving value from the network: " + e.getMessage());
+            return null;
+        }
+    }
+
+    // New method to find closest full node
+    public String findClosestFullNode(String hashID) {
+        try {
+            // Connect to the 2D#4 network
+            Socket socket = new Socket(ipAddress, port);
+            PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+            BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+
+            // Send FIND? request
+            out.println("FIND? " + hashID); // Assuming hashID is sent as part of the FIND? request
+
+            // Receive response
+            String response = in.readLine();
+
+            // Close connection
+            socket.close();
+
+            // Check if response contains the closest full node's address
+            if (response != null && response.startsWith("CLOSEST ")) {
+                // Extract the closest full node's address from the response
+                String closestNodeAddress = response.substring(8); // Assuming "CLOSEST " prefix is removed
+                return closestNodeAddress;
+            } else {
+                // No closest full node found or error response
+                return null;
+            }
+
+        } catch (Exception e) {
+            // Handle error
+            System.err.println("Error finding closest full node: " + e.getMessage());
+            return null;
+        }
     }
 }
