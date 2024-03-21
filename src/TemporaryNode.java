@@ -4,13 +4,14 @@
 // Submission by
 // Ihsaan Ishaaq Rashid
 // 220009476
-// Ihsaan.Rashid@city.ac.uk
+// Ihsaan.Rashid@City.ac.uk
 
-import java.net.Socket;
-import java.io.PrintWriter;
+
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
-
+import java.io.PrintWriter;
+import java.net.Socket;
 // DO NOT EDIT starts
 interface TemporaryNodeInterface {
     public boolean start(String startingNodeName, String startingNodeAddress);
@@ -21,144 +22,144 @@ interface TemporaryNodeInterface {
 
 
 public class TemporaryNode implements TemporaryNodeInterface {
-
-    private String ipAddress;
-    private int port;
-    private String hashID; // Added hashID as a class member
+    private Socket socket;
+    private PrintWriter out;
+    private BufferedReader in;
 
     public boolean start(String startingNodeName, String startingNodeAddress) {
         try {
-            // Find the closest full node
-            String closestNodeAddress = findClosestFullNode(hashID);
+            // Connect to the starting node's address
+            socket = new Socket(startingNodeAddress.split(":")[0], Integer.parseInt(startingNodeAddress.split(":")[1]));
+            out = new PrintWriter(socket.getOutputStream(), true);
+            in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
-            if (closestNodeAddress != null) {
-                // Split the closest node address into IP address and port
-                String[] parts = closestNodeAddress.split(":");
-                ipAddress = parts[0];
-                port = Integer.parseInt(parts[1]);
+            //We send a START message to the starting node in order to initiate the communication.
+            out.println("START 1 " + startingNodeName);
 
-                // Connect to the closest full node
-                Socket socket = new Socket(ipAddress, port);
-                PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
-                BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-
-                // Send START message
-                out.println("START 1 " + startingNodeName);
-
-                // Receive response
-                String response = in.readLine();
-
-                // Close connection
-                socket.close();
-
-                // Check if connection was successful
-                return response != null && response.equals("START 1");
+            // We wait for a response from the starting node. If the response matches the expected START message, then the connection is successful
+            String response = in.readLine();
+            if (response != null && response.equals("START 1 " + startingNodeName)) {
+                System.out.println("Connected to the 2D#4 network");
+                return true;
             } else {
-                // Closest full node not found
-                System.err.println("Error: Closest full node not found");
+                System.err.println("Failed to connect to the 2D#4 network");
                 return false;
             }
-        } catch (Exception e) {
-            // Handle connection error
-            System.err.println("Error connecting to the closest full node: " + e.getMessage());
+        } catch (IOException e) {
+            System.err.println("Error connecting to the 2D#4 network: " + e.getMessage());
             return false;
         }
     }
 
-
     public boolean store(String key, String value) {
         try {
-            // Connect to the 2D#4 network
-            Socket socket = new Socket(ipAddress, port);
-            PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
-            BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-
-            // Send PUT? request
-            out.println("PUT? 1 1"); // Assuming key and value each occupy one line
+            // Send PUT? request to the server which will store the (key, value) pair
+            out.println("PUT? 1 " + value.split("\n").length);
             out.println(key);
             out.println(value);
 
-            // Receive response
+            // Receive response from the server and read it to determine if the store operation is successful.
             String response = in.readLine();
-
-            // Close connection
-            socket.close();
-
-            // Check if store was successful
-            return response != null && response.equals("SUCCESS");
-
-        } catch (Exception e) {
-            // Handle store error
+            if (response != null && response.equals("SUCCESS")) {
+                System.out.println("Store successful!");
+                return true;
+            } else if (response != null && response.equals("FAILED")) {
+                System.err.println("Store failed: Node refused to store the value.");
+                return false;
+            } else {
+                System.err.println("Unexpected response from server: " + response);
+                return false;
+            }
+        } catch (IOException e) {
             System.err.println("Error storing (key, value) pair: " + e.getMessage());
             return false;
         }
     }
 
-
     public String get(String key) {
         try {
-            // Connect to the 2D#4 network
-            Socket socket = new Socket(ipAddress, port);
-            PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
-            BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            // Send GET? request to server to retrieve the value for the given key
+            out.println("GET? 1");
+            out.println(key);
 
-            // Send GET? request
-            out.println("GET? " + key); // Assuming key is sent as part of the GET? request
-
-            // Receive response
+            // Receive response from the server and read it to determine if the operation was successful.
+            // If response starts with VALUE then the server found the value, and we parse the value from response and return it.
+            //If response is NOPE it means server did not find the value and we print an error.
             String response = in.readLine();
-
-            // Close connection
-            socket.close();
-
-            // Check if response contains the value
-            if (response != null && response.startsWith("VALUE ")) {
-                // Extract the value from the response
-                String value = response.substring(6); // Assuming "VALUE " prefix is removed
-                return value;
+            if (response != null && response.startsWith("VALUE")) {
+                int numLines = Integer.parseInt(response.split(" ")[1]);
+                StringBuilder valueBuilder = new StringBuilder();
+                for (int i = 0; i < numLines; i++) {
+                    valueBuilder.append(in.readLine()).append("\n");
+                }
+                return valueBuilder.toString();
+            } else if (response != null && response.equals("NOPE")) {
+                System.err.println("Value not found in the network.");
+                return null;
             } else {
-                // Value not found or error response
+                System.err.println("Unexpected response from server: " + response);
                 return null;
             }
-
-        } catch (Exception e) {
-            // Handle error
-            System.err.println("Error retrieving value from the network: " + e.getMessage());
+        } catch (IOException | NumberFormatException e) {
+            System.err.println("Error retrieving value for key: " + e.getMessage());
             return null;
         }
     }
-
-    // New method to find closest full node
-    public String findClosestFullNode(String hashID) {
+    public String echoRequest() {
         try {
-            // Connect to the 2D#4 network
-            Socket socket = new Socket(ipAddress, port);
-            PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
-            BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            // Send ECHO? request to check if the connection is active
+            out.println("ECHO?");
 
-            // Send FIND? request
-            out.println("FIND? " + hashID); // Assuming hashID is sent as part of the FIND? request
-
-            // Receive response
+            // Receive response from the server and read it to determine if the connection is active or not.
             String response = in.readLine();
-
-            // Close connection
-            socket.close();
-
-            // Check if response contains the closest full node's address
-            if (response != null && response.startsWith("CLOSEST ")) {
-                // Extract the closest full node's address from the response
-                String closestNodeAddress = response.substring(8); // Assuming "CLOSEST " prefix is removed
-                return closestNodeAddress;
+            if (response != null && response.equals("OHCE")) {
+                return "Connection is active.";
             } else {
-                // No closest full node found or error response
-                return null;
+                return "Connection is not active.";
             }
+        } catch (IOException e) {
+            System.err.println("Error sending ECHO? request: " + e.getMessage());
+            return "Error: " + e.getMessage();
+        }
+    }
+    public boolean notifyRequest(String nodeName, String nodeAddress) {
+        try {
+            // Send NOTIFY request to inform the server of a full node's address
+            //Therefore we provide the node name and address as parameters to the method.
+            out.println("NOTIFY?");
+            out.println(nodeName);
+            out.println(nodeAddress);
 
-        } catch (Exception e) {
-            // Handle error
-            System.err.println("Error finding closest full node: " + e.getMessage());
-            return null;
+            // Receive response from the server. If response is NOTIFIED then we return true.
+            //If response is unexpected then we handle it accordingly and return false.
+            String response = in.readLine();
+            return response != null && response.equals("NOTIFIED");
+        } catch (IOException e) {
+            System.err.println("Error sending NOTIFY? request: " + e.getMessage());
+            return false;
+        }
+    }
+    public String[] nearestRequest(String hashID) {
+        try {
+            // Send NEAREST? request to find the nearest nodes to the given hashID
+            out.println("NEAREST? " + hashID);
+
+            // Receive response from the server. If response starts with NODES, it means nearest nodes were found,and we parse and return them.
+            //If response is unexpected we return an empty array.
+            String response = in.readLine();
+            if (response != null && response.startsWith("NODES")) {
+                int numNodes = Integer.parseInt(response.split(" ")[1]);
+                String[] nodes = new String[numNodes];
+                for (int i = 0; i < numNodes; i++) {
+                    nodes[i] = in.readLine();
+                }
+                return nodes;
+            } else {
+                return new String[0];
+            }
+        } catch (IOException | NumberFormatException e) {
+            System.err.println("Error sending NEAREST? request: " + e.getMessage());
+            return new String[0];
         }
     }
 }
