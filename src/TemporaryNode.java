@@ -162,4 +162,17 @@ public class TemporaryNode implements TemporaryNodeInterface {
             return new String[0];
         }
     }
+    public void end() {
+        try {
+            // Send END message to terminate the communication
+            out.println("END");
+
+            // Close the input and output streams and the socket
+            in.close();
+            out.close();
+            socket.close();
+        } catch (IOException e) {
+            System.err.println("Error ending communication: " + e.getMessage());
+        }
+    }
 }
