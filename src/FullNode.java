@@ -194,7 +194,7 @@ public class FullNode implements FullNodeInterface {
             } catch (UnsupportedEncodingException e) {
                 System.err.println("Unsupported encoding: " + e.getMessage());
             } catch (Exception e) {
-                System.err.println("Error converting node hash to byte array: " + e.getMessage());
+                System.err.println("Error converting the node hash to a byte array: " + e.getMessage());
                 return nearestNodes;
             }
 
